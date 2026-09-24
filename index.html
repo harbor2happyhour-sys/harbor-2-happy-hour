@@ -2103,7 +2103,7 @@ position:fixed!important;inset:0!important;overflow:auto!important;z-index:21474
   });
 })();
 </script>
-<script id="v50-verified-itinerary-engine">
+<script id="v55-full-day-itinerary-engine">
 (function(){
   const KEY='h2hh_v50_verified';
   let state={stops:[],transport:'Taxi / safari',priority:'Balanced',ship:'',sailing:null};
@@ -2187,14 +2187,33 @@ position:fixed!important;inset:0!important;overflow:auto!important;z-index:21474
     if(!stops.length) stops=[DB['COKI POINT BEACH'],DB['VENDORS PLAZA / DOWNTOWN CHARLOTTE AMALIE']];
     if(stops.some(x=>x.type==='beach')&&stops.some(x=>x.type==='shopping')) stops.sort((a,b)=>a.type==='beach'?-1:b.type==='beach'?1:0);
     const sail=state.sailing; const start=(sail&&sail.arrival)||'09:00'; let cur=start, rows=[];
+    const toMinutes=t=>{let [h,m]=t.split(':').map(Number);return h*60+m};
+    const target=sail?addMin(sail.departure,-90):null;
+    const travelMins=stops.map(s=>parseInt(s.travel)||20);
+    const fixedMins=30+travelMins.reduce((a,b)=>a+b,0)+20;
+    let activityMins=stops.map(s=>s.stay);
+    if(target&&stops.length){
+      let available=toMinutes(target)-toMinutes(start)-fixedMins;
+      if(available<stops.length*30) available=stops.length*30;
+      if(stops.length===1){activityMins=[available]}
+      else if(stops.length===2){
+        let w=[.5,.5]; const pr=(state.priority||'').toLowerCase();
+        if(pr.includes('beach')&&stops[0].type==='beach')w=[.65,.35];
+        else if(pr.includes('shopping')&&stops[1].type==='shopping')w=[.35,.65];
+        activityMins=[Math.round(available*w[0]),available-Math.round(available*w[0])];
+      }else{
+        const base=Math.floor(available/stops.length); activityMins=stops.map(()=>base); activityMins[activityMins.length-1]+=available-base*stops.length;
+      }
+    }
     rows.push([fmt(cur),'🚢','Get Off the Ship','Disembark and make your way to the taxi stand. Allow about 30 minutes.','Walk to taxi stand: ~30 minutes']); cur=addMin(cur,30);
     stops.forEach((s,i)=>{
       rows.push([fmt(cur),'🚕',`Taxi ${i+1} — ${i===0?'Ship':stops[i-1].name} → ${s.name}`,`Take a taxi to ${s.name}.`,`${i===0?firstLegFare(s,sail):`${s.travel}. ${legFare(stops[i-1].name,s.name)}`}`]);
-      let mins=parseInt(s.travel)||20; cur=addMin(cur,mins);
-      rows.push([fmt(cur),s.type==='beach'?'🏝️':s.type==='shopping'?'🛍️':'🏛️',s.name,`Recommended time: about ${Math.round(s.stay/15)*15} minutes.`,s.cost]); cur=addMin(cur,s.stay);
+      cur=addMin(cur,travelMins[i]);
+      const stay=activityMins[i];
+      rows.push([fmt(cur),s.type==='beach'?'🏝️':s.type==='shopping'?'🛍️':'🏛️',s.name,`Planned time: about ${stay} minutes.`,s.cost]); cur=addMin(cur,stay);
     });
     rows.push([fmt(cur),'🚕',`Taxi ${stops.length+1} — ${stops[stops.length-1].name} → Ship`,'Return to your cruise pier.',returnFare()]); cur=addMin(cur,20);
-    rows.push([fmt(cur),'🚢','Return to the Ship','Arrive back at the pier with a substantial safety margin.','Your cruise line’s actual all-aboard time controls. Confirm it before leaving the ship.']);
+    rows.push([fmt(cur),'🚢','Return to the Ship',target?'Arrive back at the pier at the Planner Return Target.':'Arrive back at the pier with a substantial safety margin.','Your cruise line’s actual all-aboard time controls. Confirm it before leaving the ship.']);
     let html='';
     if(sail){const ret=addMin(sail.departure,-90);html+=`<div class="v53-sailing"><div class="ship">${esc(sail.ship)} · ${esc(sail.date)}</div><div class="details">${esc(sail.pier)} | Arrive ${fmt(sail.arrival)} | Depart ${fmt(sail.departure)} | Planner Return Target ${fmt(ret)}</div><div class="subject">Times and locations are subject to change. Confirm your ship’s current schedule and docking location before going ashore.</div></div>`;}else{html+='<div class="v48-note">Ship schedule was not carried into this plan. Confirm your ship’s port time, docking location and all-aboard time before going ashore.</div>';}
     for(const r of rows)html+=`<div class="v48-row"><div class="v48-time">${r[0]}</div><div class="v48-main"><span class="v48-icon">${r[1]}</span><div><h3>${esc(r[2])}</h3><p>${esc(r[3])}</p></div></div><div class="v48-info"><strong>${esc(r[4])}</strong></div></div>`;
