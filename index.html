@@ -2103,13 +2103,22 @@ position:fixed!important;inset:0!important;overflow:auto!important;z-index:21474
   });
 })();
 </script>
-<script id="v55-full-day-itinerary-engine">
+<script id="v56-strict-interest-itinerary-engine">
 (function(){
   const KEY='h2hh_v50_verified';
-  let state={stops:[],transport:'Taxi / safari',priority:'Balanced',ship:'',sailing:null};
+  let state={stops:[],interests:[],transport:'Taxi / safari',priority:'Balanced',ship:'',sailing:null};
   try{state=Object.assign(state,JSON.parse(sessionStorage.getItem(KEY)||'{}'))}catch(e){}
   const save=()=>{try{sessionStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
   const clean=s=>(s||'').replace(/\s+/g,' ').trim();
+  const interestType=v=>({beach:'beach',shopping:'shopping',history:'history',food:'food'}[v]||v);
+  const captureInterests=()=>{
+    const picked=Array.from(document.querySelectorAll('#style input[data-interest]:checked')).map(x=>interestType(x.dataset.interest||x.value));
+    state.interests=picked;
+    // Starting a new interest plan must never inherit destinations from a previous plan.
+    state.stops=[];
+    save();
+  };
+  document.getElementById('interestContinue')?.addEventListener('click',captureInterests,true);
   const prettyPier=p=>/HAVENSIGHT|WICO/i.test(p||'')?'Havensight Cruise Pier':/CROWN BAY/i.test(p||'')?'Crown Bay Cruise Pier':clean(p)||'Cruise pier';
   document.querySelectorAll('[id^="ships-"] a.choice').forEach(a=>a.addEventListener('click',()=>{const t=clean(a.textContent);if(!/manual|don.t see/i.test(t)){state.ship=t;save()}}));
   document.querySelectorAll('[id^="dates-"] a.choice').forEach(a=>a.addEventListener('click',()=>{
@@ -2144,6 +2153,7 @@ position:fixed!important;inset:0!important;overflow:auto!important;z-index:21474
     const label=clean(banner.querySelector('span')?.textContent).toUpperCase();
     const key=clean(banner.querySelector('strong')?.textContent).toUpperCase();
     let obj=DB[key]; if(!obj)return;
+    if((state.interests||[]).length && !state.interests.includes(obj.type)) return;
     state.stops=state.stops.filter(x=>x.type!==obj.type); state.stops.push(obj); save();
   }
   document.querySelectorAll('section').forEach(sec=>{
@@ -2183,8 +2193,15 @@ position:fixed!important;inset:0!important;overflow:auto!important;z-index:21474
   }
   function render(){
     try{state=Object.assign(state,JSON.parse(sessionStorage.getItem(KEY)||'{}'))}catch(e){}
-    let stops=state.stops||[];
-    if(!stops.length) stops=[DB['COKI POINT BEACH'],DB['VENDORS PLAZA / DOWNTOWN CHARLOTTE AMALIE']];
+    const allowed=new Set((state.interests||[]).filter(x=>['beach','shopping','history'].includes(x)));
+    let stops=(state.stops||[]).filter(x=>!allowed.size || allowed.has(x.type));
+    // Never invent an unselected destination. Fallbacks are only allowed inside a selected category.
+    if(!stops.length && allowed.size){
+      if(allowed.has('beach')) stops.push(DB['COKI POINT BEACH']);
+      if(allowed.has('history')) stops.push(DB['FORT CHRISTIAN']);
+      if(allowed.has('shopping')) stops.push(DB['VENDORS PLAZA / DOWNTOWN CHARLOTTE AMALIE']);
+    }
+    if(!stops.length) stops=[DB['COKI POINT BEACH']];
     if(stops.some(x=>x.type==='beach')&&stops.some(x=>x.type==='shopping')) stops.sort((a,b)=>a.type==='beach'?-1:b.type==='beach'?1:0);
     const sail=state.sailing; const start=(sail&&sail.arrival)||'09:00'; let cur=start, rows=[];
     const toMinutes=t=>{let [h,m]=t.split(':').map(Number);return h*60+m};
